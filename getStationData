@@ -1,0 +1,61 @@
+#!/bin/sh
+#wifiInterfaces=$(nvram get wl_ifnames)
+wifiInterfaces="eth1 eth2" 
+export HOSTNAME=$(hostname)
+JQ=/opt/bin/jq 
+CLIENTLIST=/tmp/clientlist.json
+
+if ! type $JQ > /dev/null;
+then
+	echo "jq not installed. Please install with opkg install jq"
+	exit 2
+fi
+                               
+
+for wlan in $wifiInterfaces; do 
+	export wlan
+        case $wlan in                                     
+                eth1)                                     
+                        export RADIO=2G                   
+                        ;;                                                
+                eth2)                                                               
+                        export RADIO=5G                                                                                
+                        ;;                                                                                             
+                *)                                                                                                     
+                        exit 2                                                                                         
+                        ;;                                                                                             
+        esac                                                                                                           
+        clients=$(wl -i  $wlan assoclist | awk '{print $2}')                                                             
+        for CLIENT in $clients; do                                                                                     
+		export CLIENT
+                export IP=$($JQ -r  '.[][env.RADIO][env.CLIENT].ip' $CLIENTLIST)                                             
+		export IP
+                wl -i $wlan sta_info $CLIENT| awk -F ':' ' #split fields on colon                                       
+                        BEGIN { printf "router.wifi.client,host=%s,radio=%s,interface=%s,client=%s,ip=%s ",ENVIRON["HOSTNAME"],ENVIRON["RADIO"],ENVIRON["wlan"],ENVIRON["CLIENT"],ENVIRON["IP"]}; 
+                        /tx data pkts: / {gsub(/ /,"",$2);printf "tx_data_pkts=%s,",$2};                 
+                        /tx data bytes: / {gsub(/ /,"",$2);printf "tx_data_bytes=%s,",$2};               
+                        /tx ucast pkts: / {gsub(/ /,"",$2);printf "tx_ucast_pkts=%s,",$2};                        
+                        /tx ucast bytes: / {gsub(/ /,"",$2);printf "tx_ucast_bytes=%s,",$2};                      
+                        /tx mcast\/bcast pkts: / {gsub(/ /,"",$2);printf "tx_mcast_bcast_pkts=%s,",$2};           
+                        /tx mcast\/bcast bytes: / {gsub(/ /,"",$2);printf "tx_mcast_bcast_bytes=%s,",$2};         
+                        /tx failures: / {gsub(/ /,"",$2);printf "tx_failures=%s,",$2};                            
+                        /rx data pkts: / {gsub(/ /,"",$2);printf "rx_data_pkts=%s,",$2};                                
+                        /rx data bytes: / {gsub(/ /,"",$2);printf "rx_data_bytes=%s,",$2};                              
+                        /rx ucast pkts: / {gsub(/ /,"",$2);printf "rx_ucast_pkts=%s,",$2};                                                                          
+                        /rx ucast bytes: / {gsub(/ /,"",$2);printf "rx_ucast_bytes=%s,",$2};                                                                        
+                        /rx mcast\/bcast pkts: / {gsub(/ /,"",$2);printf "rx_mcast_bcast_pkts=%s,",$2};                                                                             
+                        /rx mcast\/bcast bytes: / {gsub(/ /,"",$2);printf "rx_mcast_bcast_bytes=%s,",$2};                                                                           
+                        /rate of last tx pkt: / {split($2,txrate," ");printf "rate_of_last_tx_pkt=%s,",txrate[1]};                                                                  
+                        /rate of last rx pkt: / {split($2,rxrate," ");printf "rate_of_last_rx_pkt=%s,",rxrate[1]};                                                                  
+                        /rx decrypt succeeds: / {gsub(/ /,"",$2);printf "rx_decrypt_succeeds=%s,",$2};                                                                              
+                        /rx decrypt failures: / {gsub(/ /,"",$2);printf "rx_decrypt_failures=%s,",$2};                                                                              
+                        /tx data pkts retried: / {gsub(/ /,"",$2);printf "tx_data_pkts_retried=%s,",$2};                                                                            
+                        /tx data pkts retry exhausted: / {gsub(/ /,"",$2);printf "tx_data_pkts_retry_exhausted=%s,",$2};                                                            
+                        /per antenna rssi of last rx data frame:/ {split($2,rssi," ");                                                                                              
+                        printf "antenna_one_rssi_last_rx_frame=%s,antenna_two_rssi_last_rx_frame=%s,antenna_three_rssi_last_rx_frame=%s,", rssi[1],rssi[2],rssi[3]};                
+                        /per antenna average rssi of rx data frames: / {split($2,avgrssi," ");                                                                                      
+                        printf "antenna_one_rssi_avg_rssi_rx_frame=%s,antenna_two_rssi_avg_rssi_rx_frame=%s,antenna_three_rssi_avg_rx_frame=%s,", avgrssi[1],avgrssi[2],avgrssi[3]};
+                        /per antenna noise floor:/ {split($2,floor," ");                                                                           
+                        printf "antenna_one_noise_floor=%s,antenna_two_noise_floor=%s,antenna_three_noise_floor=%s\n", floor[1],floor[2],floor[3]}'
+        done
+done
